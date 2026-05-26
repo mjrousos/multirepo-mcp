@@ -122,15 +122,19 @@ The container expects to run behind a **TLS-terminating reverse proxy** (Azure C
 
 ## Usage
 
-The server exposes a [streamable-HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) MCP endpoint at `POST /mcp`. Every MCP request must include:
+The server exposes a [streamable-HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) MCP endpoint at `POST /mcp`.
 
-| Header | Value |
-| --- | --- |
-| `Authorization` | `Bearer <configured bearer token>` |
-| `Content-Type` | `application/json` |
-| `Accept` | `application/json, text/event-stream` |
-| `X-Caller-Repository` | `owner/repo` of the calling repository (required when the allowlist is enabled) |
-| `X-Correlation-Id` | _(optional)_ caller-supplied correlation ID; echoed back in responses |
+The transport-level headers required by the streamable-HTTP spec — `Content-Type: application/json` and `Accept: application/json, text/event-stream` — are sent automatically by every conforming MCP client (the official TypeScript, Python, and C# SDKs all do this in their HTTP transport). You should **not** need to configure these yourself.
+
+The headers you do need to configure on the MCP client are:
+
+| Header | Required | Value |
+| --- | --- | --- |
+| `Authorization` | yes | `Bearer <configured bearer token>` — the static token from `Authentication:BearerToken` |
+| `X-Caller-Repository` | when allowlist is enabled | `owner/repo` of the calling repository; the server rejects the request if this is missing or not in `Authentication:CallerRepositoryAllowlist` |
+| `X-Correlation-Id` | optional | caller-supplied correlation ID; echoed back in responses and surfaced in server logs for cross-system tracing |
+
+Most MCP clients expose a way to set additional HTTP headers on the transport — for example, the C# SDK accepts them via `SseClientTransportOptions.AdditionalHeaders`, and the TypeScript SDK takes a `requestInit.headers` option on `StreamableHTTPClientTransport`.
 
 ### Tool reference
 
