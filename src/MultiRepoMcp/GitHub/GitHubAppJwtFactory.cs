@@ -1,4 +1,3 @@
-using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,6 +9,10 @@ namespace MultiRepoMcp.GitHub;
 /// <summary>
 /// Creates GitHub App JWTs with RS256 signing per
 /// https://docs.github.com/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app.
+///
+/// Signing is delegated to an <see cref="IJwtSigner"/>: in production this
+/// is <c>KeyVaultJwtSigner</c>, which performs the signature inside Azure
+/// Key Vault so the App's private key never enters this process.
 ///
 /// Claims:
 ///   iss = GitHub App ID
@@ -29,24 +32,22 @@ internal sealed class GitHubAppJwtFactory : IGitHubAppJwtFactory
     private static readonly TimeSpan IssuedAtBackdate = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(9);
 
-    private readonly IGitHubPrivateKeyProvider _privateKeyProvider;
+    private readonly IJwtSigner _signer;
     private readonly GitHubAppOptions _options;
     private readonly TimeProvider _timeProvider;
 
     public GitHubAppJwtFactory(
-        IGitHubPrivateKeyProvider privateKeyProvider,
+        IJwtSigner signer,
         IOptions<GitHubAppOptions> options,
         TimeProvider timeProvider)
     {
-        _privateKeyProvider = privateKeyProvider;
+        _signer = signer;
         _options = options.Value;
         _timeProvider = timeProvider;
     }
 
     public async ValueTask<string> CreateAsync(CancellationToken cancellationToken)
     {
-        var key = await _privateKeyProvider.GetPrivateKeyAsync(cancellationToken).ConfigureAwait(false);
-
         var now = _timeProvider.GetUtcNow();
         var iat = now - IssuedAtBackdate;
         var exp = now + TokenLifetime;
@@ -64,10 +65,11 @@ internal sealed class GitHubAppJwtFactory : IGitHubAppJwtFactory
         var signingInput = $"{headerEncoded}.{payloadEncoded}";
         var signingInputBytes = Encoding.ASCII.GetBytes(signingInput);
 
-        byte[] signature = key.SignData(
-            signingInputBytes,
-            HashAlgorithmName.SHA256,
-            RSASignaturePadding.Pkcs1);
+        // SHA-256 the signing input ourselves and hand the digest to the
+        // signer. This lets KeyVaultJwtSigner call Key Vault's "sign digest"
+        // API directly — no bulk byte transfer, no key download.
+        var digest = SHA256.HashData(signingInputBytes);
+        var signature = await _signer.SignDigestAsync(digest, cancellationToken).ConfigureAwait(false);
 
         return $"{signingInput}.{Base64UrlEncode(signature)}";
     }

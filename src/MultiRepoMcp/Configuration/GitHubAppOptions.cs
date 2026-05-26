@@ -14,10 +14,12 @@ public sealed class GitHubAppOptions
     [Required]
     public Uri? KeyVaultUri { get; init; }
 
-    /// <summary>Name of the Key Vault secret containing the App's PEM private key.</summary>
+    /// <summary>Name of the Key Vault <b>key</b> (not secret) used to sign App JWTs. The
+    /// private key never leaves Key Vault — this process only ever sees the
+    /// signature output.</summary>
     [Required]
     [MinLength(1)]
-    public string PrivateKeySecretName { get; init; } = string.Empty;
+    public string PrivateKeyName { get; init; } = string.Empty;
 
     /// <summary>
     /// Proactively refresh installation access tokens when their remaining

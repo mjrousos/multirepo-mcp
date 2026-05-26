@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MultiRepoMcp.Authentication;
 using MultiRepoMcp.Configuration;
 using MultiRepoMcp.GitHub;
@@ -17,7 +20,23 @@ builder.Services.AddMultiRepoMcpHealthChecks();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMemoryCache();
 
-builder.Services.AddSingleton<IGitHubPrivateKeyProvider, MultiRepoMcp.GitHub.KeyVaultPrivateKeyProvider>();
+builder.Services.AddSingleton<IJwtSigner>(sp =>
+{
+    // Choose the production (Key Vault) signer or the dev local-PEM signer
+    // based on configuration: if a LocalPrivateKeyPath is set, prefer it
+    // (developer override). Otherwise, sign via Azure Key Vault so the
+    // App's private key never enters this process.
+    var options = sp.GetRequiredService<IOptions<GitHubAppOptions>>();
+    if (!string.IsNullOrEmpty(options.Value.LocalPrivateKeyPath))
+    {
+        return new LocalPemJwtSigner(
+            options,
+            sp.GetRequiredService<ILogger<LocalPemJwtSigner>>());
+    }
+    return new KeyVaultJwtSigner(
+        options,
+        sp.GetRequiredService<ILogger<KeyVaultJwtSigner>>());
+});
 builder.Services.AddSingleton<IGitHubAppJwtFactory, GitHubAppJwtFactory>();
 builder.Services.AddSingleton<IGitHubClientFactory, GitHubClientFactory>();
 builder.Services.AddSingleton<IInstallationTokenCache, InstallationTokenCache>();

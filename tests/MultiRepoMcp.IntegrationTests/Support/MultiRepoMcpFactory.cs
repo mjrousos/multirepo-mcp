@@ -52,13 +52,41 @@ public sealed class MultiRepoMcpFactory : WebApplicationFactory<Program>
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
+            // Strip developer-local sources (user secrets, env vars, command-line)
+            // so integration-test runs are hermetic and reproducible. The
+            // server's UserSecretsId-bearing csproj would otherwise leak
+            // whatever the contributor has set locally — including, e.g., a
+            // stale Authentication:CallerRepositoryAllowlist that breaks
+            // assertions about default allowlist-disabled behavior.
+            for (var i = config.Sources.Count - 1; i >= 0; i--)
+            {
+                var source = config.Sources[i];
+                var typeName = source.GetType().FullName ?? string.Empty;
+                if (typeName.Contains("EnvironmentVariables", StringComparison.Ordinal)
+                    || typeName.Contains("CommandLine", StringComparison.Ordinal))
+                {
+                    config.Sources.RemoveAt(i);
+                    continue;
+                }
+                // User secrets are loaded via JsonConfigurationSource whose
+                // Path points at a file under the UserSecrets folder. Match by
+                // file path rather than by source type so we don't also drop
+                // the server's appsettings.json.
+                if (source is Microsoft.Extensions.Configuration.Json.JsonConfigurationSource json
+                    && (json.Path?.Contains("UserSecrets", StringComparison.OrdinalIgnoreCase) == true
+                        || json.Path?.EndsWith("secrets.json", StringComparison.OrdinalIgnoreCase) == true))
+                {
+                    config.Sources.RemoveAt(i);
+                }
+            }
+
             var overrides = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["AllowedHosts"] = AllowedHosts,
                 ["Authentication:BearerToken"] = BearerToken,
                 ["GitHubApp:AppId"] = "12345",
                 ["GitHubApp:KeyVaultUri"] = "https://example.vault.azure.net/",
-                ["GitHubApp:PrivateKeySecretName"] = "test-secret",
+                ["GitHubApp:PrivateKeyName"] = "test-key",
                 ["GitHubApp:LocalPrivateKeyPath"] = _pemPath,
                 ["GitHubApp:ApiBaseAddress"] = WireMockUrl + "/",
                 // Tight cache TTLs keep tests deterministic; the health-check

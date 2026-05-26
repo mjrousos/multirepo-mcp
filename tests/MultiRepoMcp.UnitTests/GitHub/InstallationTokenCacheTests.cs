@@ -21,7 +21,7 @@ public class InstallationTokenCacheTests
     {
         AppId = 12345,
         KeyVaultUri = new Uri("https://example.vault.azure.net/"),
-        PrivateKeySecretName = "key",
+        PrivateKeyName = "key",
         InstallationTokenRefreshThreshold = TimeSpan.FromMinutes(5),
         InstallationTokenRefreshJitter = TimeSpan.FromSeconds(30),
     };

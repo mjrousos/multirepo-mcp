@@ -16,13 +16,24 @@ MultiRepo-MCP is an MCP server that enables access to GitHub repositories. It en
 3. Note the App's numeric **App ID** (shown at the top of the App settings page).
 4. [Install the App](https://docs.github.com/apps/using-github-apps/installing-your-own-github-app) on every repository the server should be allowed to read. The App can have multiple installations — the server resolves the correct one per request.
 
-### 2. Store the private key in Azure Key Vault
+### 2. Import the private key into Azure Key Vault
+
+The server signs GitHub App JWTs **inside Key Vault** — the private key never leaves the vault, even at runtime. To make this work the PEM must be imported as a **Key Vault key** (not a secret).
 
 1. Create (or pick) an Azure Key Vault that the server's hosting environment can reach over Managed Identity.
-2. Upload the PEM as a secret. The default secret name expected by the server is `multirepo-mcp-private-key`; you can override this via `GitHubApp:PrivateKeySecretName`.
-3. Grant the hosting compute's Managed Identity the **`Get`** permission on secrets (RBAC role `Key Vault Secrets User` is sufficient).
+2. Import the PEM as an RSA key:
 
-> Local development can skip Key Vault entirely by setting `GitHubApp:LocalPrivateKeyPath` to a filesystem path containing the PEM (see the dev section below).
+   ```pwsh
+   az keyvault key import `
+     --vault-name my-vault `
+     --name multirepo-mcp-private-key `
+     --pem-file ./multirepo-mcp.private-key.pem
+   ```
+
+   The default key name expected by the server is `multirepo-mcp-private-key`; you can override this via `GitHubApp:PrivateKeyName`.
+3. Grant the hosting compute's Managed Identity the **Sign** permission on the key — RBAC role `Key Vault Crypto User` is sufficient (or `Sign` via an access policy if your vault still uses the legacy permission model).
+
+> Local development can skip Key Vault entirely by setting `GitHubApp:LocalPrivateKeyPath` to a filesystem path containing the PEM (see the dev section below). In that mode signing happens locally with the loaded RSA key.
 
 ### 3. Pick a static bearer token
 
@@ -50,7 +61,7 @@ If you want to restrict which inbound callers are accepted, set `Authentication:
   "GitHubApp": {
     "AppId": 123456,
     "KeyVaultUri": "https://my-vault.vault.azure.net/",
-    "PrivateKeySecretName": "multirepo-mcp-private-key",
+    "PrivateKeyName": "multirepo-mcp-private-key",
     "InstallationTokenRefreshThreshold": "00:05:00",
     "InstallationTokenRefreshJitter": "00:00:30"
   },
@@ -71,8 +82,8 @@ If you want to restrict which inbound callers are accepted, set `Authentication:
 | `Authentication:BearerToken` | `Authentication__BearerToken` | _(required)_ | Static token callers present as `Authorization: Bearer …`. Min 20 chars; startup rejects placeholders. |
 | `Authentication:CallerRepositoryAllowlist` | `Authentication__CallerRepositoryAllowlist__0`, `…__1`, … | `null` | Optional list of permitted `owner/repo` values for `X-Caller-Repository`. |
 | `GitHubApp:AppId` | `GitHubApp__AppId` | _(required)_ | Numeric App ID. |
-| `GitHubApp:KeyVaultUri` | `GitHubApp__KeyVaultUri` | _(required)_ | Key Vault URI containing the App's PEM. |
-| `GitHubApp:PrivateKeySecretName` | `GitHubApp__PrivateKeySecretName` | `multirepo-mcp-private-key` | Key Vault secret name. |
+| `GitHubApp:KeyVaultUri` | `GitHubApp__KeyVaultUri` | _(required)_ | Key Vault URI containing the App's signing key. |
+| `GitHubApp:PrivateKeyName` | `GitHubApp__PrivateKeyName` | `multirepo-mcp-private-key` | Key Vault **key** name. Signing happens inside the vault; the private key never leaves it. |
 | `GitHubApp:InstallationTokenRefreshThreshold` | `GitHubApp__InstallationTokenRefreshThreshold` | `00:05:00` | Proactively refresh IATs when remaining lifetime falls below this. |
 | `GitHubApp:InstallationTokenRefreshJitter` | `GitHubApp__InstallationTokenRefreshJitter` | `00:00:30` | Max per-key jitter added to the refresh threshold to spread herds. |
 | `GitHubApp:ApiBaseAddress` | `GitHubApp__ApiBaseAddress` | _(unset → api.github.com)_ | Override the GitHub REST base URL (used by tests). |
@@ -201,7 +212,7 @@ Transport-level errors (bearer rejected, allowlist deny, host filtering, etc.) a
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health/live` | Liveness. Dependency-free; returns `200 {"status":"Healthy"}` whenever the process is up. **Use this for `livenessProbe`** — never wire dependency checks into liveness or transient GitHub blips will trigger container restarts. |
-| `GET /health/ready` | Readiness. Verifies the App PEM is reachable in Key Vault (or local file) and that GitHub responds to `GET /app` via the App JWT. Results are cached for `Cache:HealthCheckResultTtl` (default 30 s) so a flood of probes can't exhaust the GitHub rate-limit budget. |
+| `GET /health/ready` | Readiness. Verifies Key Vault signing is reachable (or the local dev key is loadable) by signing a fixed probe digest, and that GitHub responds to `GET /app` via the App JWT. Results are cached for `Cache:HealthCheckResultTtl` (default 30 s) so a flood of probes can't exhaust the GitHub rate-limit budget. |
 | `GET /health/startup` | Same checks as `/health/ready`, intended for orchestrator startup probes. |
 
 Health responses intentionally omit individual check names, descriptions, and exception data — only `{"status":"Healthy|Unhealthy"}` is returned to avoid leaking topology. Diagnostic detail is in the server log.
@@ -259,13 +270,13 @@ MultiRepo-MCP authenticates with GitHub in the following way:
 During Setup:
 1. A GitHub app is [registered](https://docs.github.com/apps/creating-github-apps/registering-a-github-app/registering-a-github-app) for MultiRepo-MCP. 
    1. This GitHub app does not need a callback URL, device flow, user authorization during installation, or any webhooks. It does require contents read access.
-   2. The private key (PEM) for this GitHub app is stored in Azure Key Vault.
+   2. The private key (PEM) for this GitHub app is **imported as a Key Vault key** (not stored as a secret). Signing happens inside Key Vault via the `/sign` API, so the private key never leaves the vault.
 2. The GitHub app is [installed](https://docs.github.com/apps/using-github-apps/installing-your-own-github-app) on the repositories that MultiRepo-MCP needs to access.
 
 On app startup:
-1. MultiRepo-MCP retrieves the private key file from Azure Key Vault. 
-   1. Authentication with Azure Key Vault is done using Managed Identity.
-   2. This private key file is used to sign a JWT token for GitHub App authentication.
+1. MultiRepo-MCP wires up a Key Vault `CryptographyClient` pointing at the configured signing key.
+   1. Authentication with Azure Key Vault is done using Managed Identity (`DefaultAzureCredential`), and the Managed Identity is granted the `Sign` permission (`Key Vault Crypto User` RBAC role) on the key.
+   2. Whenever a GitHub App JWT is needed, the server computes a SHA-256 digest of the JWT signing input locally and asks Key Vault to sign that digest with `RS256`. The resulting signature is appended to produce the final JWT.
 2. MultiRepo-MCP loads a static bearer token from configuration. This bearer token will be used by callers to authenticate with MultiRepo-MCP.
 3. MultiRepo-MCP loads an optional list of pre-authorized caller repositories from configuration.
 
@@ -273,7 +284,7 @@ During operation:
 1. When a request is made to MultiRepo-MCP, the caller includes the static bearer token in the Authorization header.
    1. MultiRepo-MCP validates the bearer token against the configured value. If the token is invalid, the request is rejected.
    2. If a list of pre-authorized caller repositories is configured, MultiRepo-MCP also validates that the caller repository (identified in the request) is in the allowlist. If the caller repository is not in the allowlist, the request is rejected.
-2. If the bearer token is valid, MultiRepo-MCP generates a JWT token signed with the GitHub App's private key and exchanges it for an installation access token (with `contents: read` permissions) with GitHub.
+2. If the bearer token is valid, MultiRepo-MCP produces a GitHub App JWT (signed inside Key Vault — only the SHA-256 digest of the signing input is sent to Key Vault, and only the signature comes back) and exchanges it for an installation access token (with `contents: read` permissions) with GitHub.
     1. The installation access token is cached in memory and reused for subsequent requests until it expires. Once the token expires, a new JWT token is generated and exchanged for a new installation access token.
     2. Note that because the GitHub App may be installed on multiple repositories (and therefore multiple installations), the server must resolve the correct installation for the target repository of each request and manage tokens per installation. Installation access tokens are cached keyed by installation ID, not globally.
 3. MultiRepo-MCP uses the installation access token to authenticate API requests to GitHub, allowing it to access the repositories that the GitHub App is installed on.

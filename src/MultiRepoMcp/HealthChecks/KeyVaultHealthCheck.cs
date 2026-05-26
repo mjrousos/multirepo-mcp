@@ -1,58 +1,53 @@
-using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Configuration;
+using MultiRepoMcp.GitHub;
 
 namespace MultiRepoMcp.HealthChecks;
 
 /// <summary>
-/// Readiness check that issues a single <c>GetSecretAsync</c> round-trip to
-/// confirm the App's private-key secret is reachable. We use the get-secret
-/// operation (which only needs the documented "Get" permission) and discard
-/// the downloaded bytes; the parsed PEM is already in memory.
+/// Readiness check that exercises the configured signing pathway by asking
+/// the active <see cref="IJwtSigner"/> to sign a fixed 32-byte digest. For
+/// the production <c>KeyVaultJwtSigner</c> this means one Key Vault
+/// <c>POST /sign</c> round-trip — which validates connectivity, AAD auth,
+/// and the <c>Sign</c> key permission all in one call. For the local-PEM
+/// signer used in dev/tests it's a microsecond in-process op.
+///
+/// Results are cached for <see cref="CacheOptions.HealthCheckResultTtl"/>
+/// to bound load on Key Vault under aggressive probe schedules.
 /// </summary>
 internal sealed class KeyVaultHealthCheck : IHealthCheck, IDisposable
 {
-    private readonly GitHubAppOptions _options;
+    // A fixed all-zero digest is fine for a liveness probe — Key Vault's
+    // /sign endpoint validates the algorithm + permission regardless of
+    // the input bytes, and we never expose the resulting signature.
+    private static readonly byte[] ProbeDigest = new byte[32];
+
+    private readonly IJwtSigner _signer;
     private readonly TimeProvider _timeProvider;
     private readonly CacheOptions _cacheOptions;
     private readonly ILogger<KeyVaultHealthCheck> _logger;
-    private readonly Lazy<SecretClient?> _secretClient;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
     private HealthCheckResult _cachedResult = HealthCheckResult.Unhealthy("Not yet checked.");
 
     public KeyVaultHealthCheck(
-        IOptions<GitHubAppOptions> options,
+        IJwtSigner signer,
         IOptions<CacheOptions> cacheOptions,
         TimeProvider timeProvider,
-        ILogger<KeyVaultHealthCheck> logger,
-        SecretClient? secretClientForTests = null)
+        ILogger<KeyVaultHealthCheck> logger)
     {
-        _options = options.Value;
+        _signer = signer;
         _cacheOptions = cacheOptions.Value;
         _timeProvider = timeProvider;
         _logger = logger;
-
-        _secretClient = new Lazy<SecretClient?>(() =>
-            secretClientForTests
-                ?? (_options.KeyVaultUri is null
-                    ? null
-                    : new SecretClient(_options.KeyVaultUri, new DefaultAzureCredential())));
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        // Dev override skips Key Vault entirely; nothing to check.
-        if (!string.IsNullOrEmpty(_options.LocalPrivateKeyPath))
-        {
-            return HealthCheckResult.Healthy("Local private-key path configured.");
-        }
-
         var now = _timeProvider.GetUtcNow();
         if (now - _cachedAt < _cacheOptions.HealthCheckResultTtl)
         {
@@ -68,41 +63,28 @@ internal sealed class KeyVaultHealthCheck : IHealthCheck, IDisposable
                 return _cachedResult;
             }
 
-            var client = _secretClient.Value;
-            if (client is null)
-            {
-                _cachedResult = HealthCheckResult.Unhealthy("Key Vault URI is not configured.");
-                _cachedAt = _timeProvider.GetUtcNow();
-                return _cachedResult;
-            }
-
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(_cacheOptions.HealthCheckDependencyTimeout);
 
             try
             {
-                // SecretClient does not expose a per-secret "get properties
-                // without value" call — only GetSecretAsync (one secret,
-                // requires Get permission) and GetPropertiesOfSecretVersionsAsync
-                // (LIST operation, requires List permission). We choose Get
-                // semantics so operators can grant the documented minimum
-                // permission (Key Vault Secrets User / "Get") and this readiness
-                // check still passes. The downloaded bytes are intentionally
-                // discarded — the PEM is already loaded once at startup.
-                _ = await client
-                    .GetSecretAsync(_options.PrivateKeySecretName, cancellationToken: cts.Token)
-                    .ConfigureAwait(false);
+                // Wrap the signer call in WaitAsync so a slow / hung Key Vault
+                // doesn't pin our semaphore for longer than the configured
+                // dependency timeout (the in-flight HTTP call is orphaned
+                // but bounded by HttpClient.Timeout in the Azure SDK).
+                var signTask = _signer.SignDigestAsync(ProbeDigest, cts.Token).AsTask();
+                _ = await signTask.WaitAsync(cts.Token).ConfigureAwait(false);
                 _cachedResult = HealthCheckResult.Healthy();
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                _logger.LogWarning("Key Vault health check timed out.");
-                _cachedResult = HealthCheckResult.Unhealthy("Key Vault health check timed out.");
+                _logger.LogWarning("Signing-key health check timed out.");
+                _cachedResult = HealthCheckResult.Unhealthy("Signing-key health check timed out.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Key Vault health check failed.");
-                _cachedResult = HealthCheckResult.Unhealthy("Key Vault metadata read failed.");
+                _logger.LogError(ex, "Signing-key health check failed.");
+                _cachedResult = HealthCheckResult.Unhealthy("Signing-key probe failed.");
             }
 
             _cachedAt = _timeProvider.GetUtcNow();
