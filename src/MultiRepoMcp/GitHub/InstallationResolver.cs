@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,15 @@ internal sealed class InstallationResolver : IInstallationResolver
     private readonly IMemoryCache _cache;
     private readonly CacheOptions _cacheOptions;
     private readonly ILogger<InstallationResolver> _logger;
+
+    // Permanent side table (no TTL) that records the last installation ID we
+    // observed for each owner/repo. Required for the plan's stale-installation
+    // invalidation: IMemoryCache evicts on TTL, so by the time a refresh
+    // discovers a new ID, the old ID is no longer in _cache. Keeping a
+    // separate persistent record lets us still detect "the installation ID
+    // for octo/cat just changed from 10 to 20" after the App was uninstalled
+    // and reinstalled.
+    private readonly ConcurrentDictionary<string, long> _lastSeenInstallationIds = new(StringComparer.Ordinal);
 
     public InstallationResolver(
         IGitHubClientFactory clientFactory,
@@ -46,12 +56,6 @@ internal sealed class InstallationResolver : IInstallationResolver
             return entry.InstallationId;
         }
 
-        long previousId = 0;
-        if (_cache.TryGetValue(key, out var existingRaw) && existingRaw is CachedEntry existing && !existing.NotFound)
-        {
-            previousId = existing.InstallationId;
-        }
-
         long installationId;
         try
         {
@@ -80,13 +84,21 @@ internal sealed class InstallationResolver : IInstallationResolver
             new CachedEntry(installationId, NotFound: false),
             _cacheOptions.InstallationDiscoveryTtl);
 
-        if (previousId != 0 && previousId != installationId)
+        // Detect a changed installation ID for the same owner/repo (App
+        // uninstalled then reinstalled elsewhere). When detected, evict any
+        // stale IAT we may still hold under the old installation ID so we
+        // don't keep handing out tokens that GitHub will reject. The lookup
+        // here uses a SEPARATE persistent table because IMemoryCache has
+        // already evicted the old entry by the time we get here on TTL refresh.
+        if (_lastSeenInstallationIds.TryGetValue(key, out var previousId)
+            && previousId != installationId)
         {
             _logger.LogInformation(
                 "Installation ID for {Owner}/{Repo} changed from {OldId} to {NewId}; invalidating IAT cache.",
                 owner, repo, previousId, installationId);
             _tokenCache.Invalidate(previousId, repo);
         }
+        _lastSeenInstallationIds[key] = installationId;
 
         return installationId;
     }

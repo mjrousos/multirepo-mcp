@@ -39,7 +39,10 @@ internal static partial class SearchCodeQueryValidation
         }
 
         // Boolean operators / negation, case-sensitive (the GitHub DSL is).
-        foreach (var token in sanitized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        // Split on ANY whitespace — not just ' ' — so tab/newline-delimited
+        // tokens like "foo\tOR\tbar" or "foo\n-keyword" can't bypass the
+        // operator/exclusion check.
+        foreach (var token in sanitized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (token is "OR" or "NOT")
             {

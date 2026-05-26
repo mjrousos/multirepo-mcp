@@ -8,7 +8,7 @@ WORKDIR /src
 
 # Copy only the files needed to restore first to maximise layer caching.
 COPY Directory.Build.props Directory.Packages.props NuGet.config* ./
-COPY MultiRepoMcp.sln ./
+COPY MultiRepoMcp.slnx ./
 COPY src/MultiRepoMcp/MultiRepoMcp.csproj src/MultiRepoMcp/
 
 RUN dotnet restore src/MultiRepoMcp/MultiRepoMcp.csproj

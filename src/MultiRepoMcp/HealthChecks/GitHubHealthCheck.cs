@@ -61,7 +61,14 @@ internal sealed class GitHubHealthCheck : IHealthCheck, IDisposable
             try
             {
                 var client = await _clientFactory.CreateAppJwtClientAsync(cts.Token).ConfigureAwait(false);
-                _ = await client.GitHubApps.GetCurrent().ConfigureAwait(false);
+                // Octokit's GitHubApps.GetCurrent() doesn't accept a
+                // CancellationToken — its underlying HttpClient.Timeout is
+                // 100s. Bound the wait ourselves with WaitAsync so a slow
+                // GitHub doesn't pin the semaphore here for ~100s and force
+                // orchestrator probes into queueing. The orphan HTTP request
+                // continues in the background but is harmless.
+                var probe = client.GitHubApps.GetCurrent();
+                _ = await probe.WaitAsync(cts.Token).ConfigureAwait(false);
                 _cachedResult = HealthCheckResult.Healthy();
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

@@ -8,9 +8,10 @@ using MultiRepoMcp.Configuration;
 namespace MultiRepoMcp.HealthChecks;
 
 /// <summary>
-/// Readiness check that issues a metadata-only call to Key Vault
-/// (<c>GetPropertiesOfSecretAsync</c>) to verify the App's private-key secret
-/// is reachable without actually retrieving its bytes.
+/// Readiness check that issues a single <c>GetSecretAsync</c> round-trip to
+/// confirm the App's private-key secret is reachable. We use the get-secret
+/// operation (which only needs the documented "Get" permission) and discard
+/// the downloaded bytes; the parsed PEM is already in memory.
 /// </summary>
 internal sealed class KeyVaultHealthCheck : IHealthCheck, IDisposable
 {
@@ -80,14 +81,17 @@ internal sealed class KeyVaultHealthCheck : IHealthCheck, IDisposable
 
             try
             {
-                // Metadata-only round-trip: iterate the secret's version list
-                // (one async page is enough to confirm reachability + RBAC).
-                await foreach (var _ in client
-                    .GetPropertiesOfSecretVersionsAsync(_options.PrivateKeySecretName, cts.Token)
-                    .ConfigureAwait(false))
-                {
-                    break;
-                }
+                // SecretClient does not expose a per-secret "get properties
+                // without value" call — only GetSecretAsync (one secret,
+                // requires Get permission) and GetPropertiesOfSecretVersionsAsync
+                // (LIST operation, requires List permission). We choose Get
+                // semantics so operators can grant the documented minimum
+                // permission (Key Vault Secrets User / "Get") and this readiness
+                // check still passes. The downloaded bytes are intentionally
+                // discarded — the PEM is already loaded once at startup.
+                _ = await client
+                    .GetSecretAsync(_options.PrivateKeySecretName, cancellationToken: cts.Token)
+                    .ConfigureAwait(false);
                 _cachedResult = HealthCheckResult.Healthy();
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
