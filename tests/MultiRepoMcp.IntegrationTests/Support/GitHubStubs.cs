@@ -118,6 +118,53 @@ internal static class GitHubStubs
                 .WithBody(sb.ToString()));
     }
 
+    /// <summary>
+    /// Stubs a GitHub directory-listing response: a JSON ARRAY of child
+    /// entries under <paramref name="dirPath"/>. GitHub returns the listing
+    /// shape for both multi-child and single-child directories, which makes
+    /// count-based "is this a directory" detection ambiguous — the server
+    /// must look at the entries' Paths.
+    /// </summary>
+    public static void StubDirectoryListing(
+        this WireMockServer wireMock,
+        string owner,
+        string repo,
+        string dirPath,
+        params string[] childNames)
+    {
+        var wmUrl = wireMock.Urls[0];
+        var sb = new StringBuilder();
+        sb.Append('[');
+        for (var i = 0; i < childNames.Length; i++)
+        {
+            if (i > 0) sb.Append(',');
+            var child = childNames[i];
+            var childPath = $"{dirPath}/{child}";
+            sb.Append('{');
+            sb.Append("\"name\":\"").Append(child).Append("\",");
+            sb.Append("\"path\":\"").Append(childPath).Append("\",");
+            sb.Append("\"sha\":\"sha-").Append(i).Append("\",");
+            sb.Append("\"size\":0,");
+            sb.Append("\"url\":\"").Append(wmUrl).Append("/repos/").Append(owner).Append('/').Append(repo).Append("/contents/").Append(childPath).Append("\",");
+            sb.Append("\"html_url\":\"https://github.com/").Append(owner).Append('/').Append(repo).Append("/blob/main/").Append(childPath).Append("\",");
+            sb.Append("\"git_url\":\"").Append(wmUrl).Append("/repos/").Append(owner).Append('/').Append(repo).Append("/git/blobs/sha-").Append(i).Append("\",");
+            sb.Append("\"download_url\":\"").Append(wmUrl).Append("/raw/").Append(owner).Append('/').Append(repo).Append("/main/").Append(childPath).Append("\",");
+            sb.Append("\"type\":\"file\",");
+            sb.Append("\"content\":\"\",");
+            sb.Append("\"encoding\":\"base64\"");
+            sb.Append('}');
+        }
+        sb.Append(']');
+
+        wireMock.Given(Request.Create()
+                .WithPath($"/repos/{owner}/{repo}/contents/{dirPath}")
+                .UsingGet())
+            .RespondWith(Response.Create()
+                .WithStatusCode(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json")
+                .WithBody(sb.ToString()));
+    }
+
     public static void StubSearchCode(
         this WireMockServer wireMock,
         string owner,

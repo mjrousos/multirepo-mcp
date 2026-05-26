@@ -35,30 +35,17 @@ internal static class HealthCheckEndpointExtensions
 
     public static IEndpointRouteBuilder MapMultiRepoMcpHealthEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var sanitized = new HealthCheckOptions
-        {
-            ResponseWriter = WriteSanitizedResponse,
-        };
-
-        endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
-        {
-            Predicate = registration => registration.Tags.Contains(LivenessTag),
-            ResponseWriter = WriteSanitizedResponse,
-        }).AllowAnonymous();
-
-        endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
-        {
-            Predicate = registration => registration.Tags.Contains(ReadinessTag),
-            ResponseWriter = WriteSanitizedResponse,
-        }).AllowAnonymous();
-
-        endpoints.MapHealthChecks("/health/startup", new HealthCheckOptions
-        {
-            Predicate = registration => registration.Tags.Contains(StartupTag),
-            ResponseWriter = WriteSanitizedResponse,
-        }).AllowAnonymous();
+        endpoints.MapHealthChecks("/health/live", BuildOptions(LivenessTag)).AllowAnonymous();
+        endpoints.MapHealthChecks("/health/ready", BuildOptions(ReadinessTag)).AllowAnonymous();
+        endpoints.MapHealthChecks("/health/startup", BuildOptions(StartupTag)).AllowAnonymous();
 
         return endpoints;
+
+        static HealthCheckOptions BuildOptions(string tag) => new()
+        {
+            Predicate = registration => registration.Tags.Contains(tag),
+            ResponseWriter = WriteSanitizedResponse,
+        };
     }
 
     /// <summary>

@@ -180,15 +180,18 @@ internal sealed class InstallationTokenCache : IInstallationTokenCache
             return _options.InstallationTokenRefreshThreshold;
         }
 
-        // Deterministic per-key hash → milliseconds offset within [0, jitterMax).
+        // Deterministic per-key hash → ticks offset within [0, jitterMax).
+        // We use ticks (not milliseconds) so sub-millisecond jitter values
+        // don't collapse the modulus base to 0 and throw DivideByZeroException.
+        // Any TimeSpan > Zero has at least 1 tick, so the modulus is always safe.
         var seedBytes = Encoding.UTF8.GetBytes(
             string.Create(CultureInfo.InvariantCulture, $"{key.InstallationId}|{key.Repo}"));
         Span<byte> hash = stackalloc byte[32];
         SHA256.HashData(seedBytes, hash);
-        var seed = BitConverter.ToUInt32(hash[..4]);
+        var seed = BitConverter.ToUInt64(hash[..8]);
 
-        var jitterMs = (long)(seed % (ulong)jitterMax.TotalMilliseconds);
-        return _options.InstallationTokenRefreshThreshold + TimeSpan.FromMilliseconds(jitterMs);
+        var jitterTicks = (long)(seed % (ulong)jitterMax.Ticks);
+        return _options.InstallationTokenRefreshThreshold + TimeSpan.FromTicks(jitterTicks);
     }
 
     private static (long, string) MakeKey(long installationId, string repo) =>

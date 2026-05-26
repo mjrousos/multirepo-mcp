@@ -65,8 +65,18 @@ public sealed class GetFileContentsTool
                 throw new NotFoundException("File not found.", System.Net.HttpStatusCode.NotFound);
             }
 
-            // Directory listings come back as multiple entries.
-            if (contents.Count > 1)
+            // Directory detection: Octokit returns a List for both file lookups
+            // and directory listings. For a file/symlink/submodule, the single
+            // entry's Path equals the requested path. For a directory, each
+            // entry's Path is a child under the requested prefix — including
+            // the corner case where the directory has exactly one child, which
+            // count-based detection would mis-classify as a file.
+            var entry = contents[0];
+            var entryPath = entry.Path?.TrimStart('/') ?? string.Empty;
+            var requestedPath = path.TrimStart('/');
+            var isDirectoryListing = contents.Count > 1
+                || !string.Equals(entryPath, requestedPath, StringComparison.Ordinal);
+            if (isDirectoryListing)
             {
                 return new
                 {
@@ -76,7 +86,6 @@ public sealed class GetFileContentsTool
                 };
             }
 
-            var entry = contents[0];
             switch (entry.Type.Value)
             {
                 case ContentType.Dir:

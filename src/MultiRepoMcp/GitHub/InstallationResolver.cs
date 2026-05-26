@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,22 +7,32 @@ using Octokit;
 
 namespace MultiRepoMcp.GitHub;
 
-internal sealed class InstallationResolver : IInstallationResolver
+internal sealed class InstallationResolver : IInstallationResolver, IDisposable
 {
+    /// <summary>
+    /// Hard cap on tracked owner/repo entries in the last-seen-installation
+    /// side cache. Bounds memory growth for long-lived deployments serving
+    /// many distinct repos. LRU-style eviction (least-recently-used by absolute
+    /// expiration) kicks in past this many entries.
+    /// </summary>
+    private const long LastSeenSizeLimit = 10_000;
+
     private readonly IGitHubClientFactory _clientFactory;
     private readonly IInstallationTokenCache _tokenCache;
     private readonly IMemoryCache _cache;
     private readonly CacheOptions _cacheOptions;
     private readonly ILogger<InstallationResolver> _logger;
 
-    // Permanent side table (no TTL) that records the last installation ID we
-    // observed for each owner/repo. Required for the plan's stale-installation
-    // invalidation: IMemoryCache evicts on TTL, so by the time a refresh
-    // discovers a new ID, the old ID is no longer in _cache. Keeping a
-    // separate persistent record lets us still detect "the installation ID
-    // for octo/cat just changed from 10 to 20" after the App was uninstalled
-    // and reinstalled.
-    private readonly ConcurrentDictionary<string, long> _lastSeenInstallationIds = new(StringComparer.Ordinal);
+    // Dedicated side cache for last-seen installation IDs. Separate from
+    // _cache so its entries survive callers clearing or compacting the
+    // discovery cache, and because we set our own size/TTL bounds.
+    // Required for the plan's stale-installation invalidation: the main
+    // _cache evicts the prior installation ID once its discovery TTL
+    // elapses, so a refresh that goes to GitHub would otherwise have no
+    // basis for comparison. We store last-seen with a longer TTL
+    // (2x InstallationDiscoveryTtl) so the value is still present when
+    // the next refresh happens after the main entry's TTL.
+    private readonly MemoryCache _lastSeenCache = new(new MemoryCacheOptions { SizeLimit = LastSeenSizeLimit });
 
     public InstallationResolver(
         IGitHubClientFactory clientFactory,
@@ -88,9 +97,12 @@ internal sealed class InstallationResolver : IInstallationResolver
         // uninstalled then reinstalled elsewhere). When detected, evict any
         // stale IAT we may still hold under the old installation ID so we
         // don't keep handing out tokens that GitHub will reject. The lookup
-        // here uses a SEPARATE persistent table because IMemoryCache has
-        // already evicted the old entry by the time we get here on TTL refresh.
-        if (_lastSeenInstallationIds.TryGetValue(key, out var previousId)
+        // here uses a SEPARATE bounded cache (_lastSeenCache) because the
+        // main discovery cache has already evicted the old entry by the
+        // time we get here on TTL refresh.
+        var lastSeenKey = MakeLastSeenKey(owner, repo);
+        if (_lastSeenCache.TryGetValue(lastSeenKey, out var lastSeenRaw)
+            && lastSeenRaw is long previousId
             && previousId != installationId)
         {
             _logger.LogInformation(
@@ -98,13 +110,26 @@ internal sealed class InstallationResolver : IInstallationResolver
                 owner, repo, previousId, installationId);
             _tokenCache.Invalidate(previousId, repo);
         }
-        _lastSeenInstallationIds[key] = installationId;
+        _lastSeenCache.Set(
+            lastSeenKey,
+            installationId,
+            new MemoryCacheEntryOptions
+            {
+                Size = 1,
+                AbsoluteExpirationRelativeToNow =
+                    TimeSpan.FromTicks(_cacheOptions.InstallationDiscoveryTtl.Ticks * 2),
+            });
 
         return installationId;
     }
 
+    public void Dispose() => _lastSeenCache.Dispose();
+
     private static string MakeKey(string owner, string repo) =>
         $"installation:{owner.ToLowerInvariant()}/{repo.ToLowerInvariant()}";
+
+    private static string MakeLastSeenKey(string owner, string repo) =>
+        $"{owner.ToLowerInvariant()}/{repo.ToLowerInvariant()}";
 
     private sealed record CachedEntry(long InstallationId, bool NotFound);
 }
