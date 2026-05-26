@@ -105,7 +105,7 @@ $env:Authentication__BearerToken    = "<random ≥ 20 chars>"
 dotnet run --project src/MultiRepoMcp
 ```
 
-The server listens on `http://localhost:5000/` by default (`/mcp` for the MCP endpoint, `/health/{live,ready,startup}` for health probes).
+With the checked-in `Properties/launchSettings.json`, `dotnet run` binds Kestrel to `http://localhost:5070` (the `http` profile; the `https` profile additionally exposes `https://localhost:7294`). When the app is started without a launch profile (for example in a published container), Kestrel falls back to its built-in defaults of `http://localhost:5000` / `https://localhost:5001`. The MCP endpoint is `POST /mcp` and health probes live under `/health/{live,ready,startup}` on whichever URL the host is bound to.
 
 ### 7. Run as a container
 
