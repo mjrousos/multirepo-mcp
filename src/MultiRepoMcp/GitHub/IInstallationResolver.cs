@@ -8,7 +8,7 @@ namespace MultiRepoMcp.GitHub;
 /// Throws <see cref="Exceptions.AppNotInstalledException"/> when GitHub
 /// returns 404 (App not installed on the requested repo).
 /// </summary>
-public interface IInstallationResolver
+internal interface IInstallationResolver
 {
     ValueTask<long> ResolveAsync(string owner, string repo, CancellationToken cancellationToken);
 }

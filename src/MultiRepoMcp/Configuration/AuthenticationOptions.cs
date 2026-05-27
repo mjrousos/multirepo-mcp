@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MultiRepoMcp.Configuration;
 
-public sealed class AuthenticationOptions
+internal sealed class AuthenticationOptions
 {
     public const string SectionName = "Authentication";
 

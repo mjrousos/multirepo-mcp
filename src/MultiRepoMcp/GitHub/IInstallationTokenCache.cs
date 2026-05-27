@@ -1,6 +1,6 @@
 namespace MultiRepoMcp.GitHub;
 
-public readonly record struct CachedToken(string Token, DateTimeOffset ExpiresAtUtc)
+internal readonly record struct CachedToken(string Token, DateTimeOffset ExpiresAtUtc)
 {
     public TimeSpan RemainingLifetime(DateTimeOffset now) =>
         ExpiresAtUtc > now ? ExpiresAtUtc - now : TimeSpan.Zero;
@@ -16,7 +16,7 @@ public readonly record struct CachedToken(string Token, DateTimeOffset ExpiresAt
 /// other repos in the same installation because the token itself is scoped
 /// down at GitHub's authoritative boundary.
 /// </summary>
-public interface IInstallationTokenCache
+internal interface IInstallationTokenCache
 {
     ValueTask<CachedToken> GetTokenAsync(
         long installationId,

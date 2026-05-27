@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MultiRepoMcp.Configuration;
 
-public sealed class GitHubAppOptions
+internal sealed class GitHubAppOptions
 {
     public const string SectionName = "GitHubApp";
 

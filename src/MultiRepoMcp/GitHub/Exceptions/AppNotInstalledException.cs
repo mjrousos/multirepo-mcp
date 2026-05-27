@@ -6,7 +6,7 @@ namespace MultiRepoMcp.GitHub.Exceptions;
 /// because the installation-access-token mint returned 422 indicating the
 /// installation cannot access the target repo.
 /// </summary>
-public sealed class AppNotInstalledException : Exception
+internal sealed class AppNotInstalledException : Exception
 {
     public AppNotInstalledException()
         : this("GitHub App is not installed on the requested repository.")

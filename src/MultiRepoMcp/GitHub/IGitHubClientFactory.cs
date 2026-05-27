@@ -6,7 +6,7 @@ namespace MultiRepoMcp.GitHub;
 /// Constructs Octokit clients over a shared <see cref="HttpMessageHandler"/> /
 /// <see cref="HttpClientAdapter"/> so we do not churn sockets per request.
 /// </summary>
-public interface IGitHubClientFactory
+internal interface IGitHubClientFactory
 {
     /// <summary>
     /// Creates a GitHub client authenticated as the App itself (JWT bearer).

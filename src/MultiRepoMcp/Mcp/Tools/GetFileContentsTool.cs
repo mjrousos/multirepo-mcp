@@ -7,7 +7,7 @@ using Octokit;
 namespace MultiRepoMcp.Mcp.Tools;
 
 [McpServerToolType]
-public sealed class GetFileContentsTool
+internal sealed class GetFileContentsTool
 {
     /// <summary>Maximum file size (in bytes) we will return content for. ~1 MiB.</summary>
     public const int MaxFileSize = 1 * 1024 * 1024;

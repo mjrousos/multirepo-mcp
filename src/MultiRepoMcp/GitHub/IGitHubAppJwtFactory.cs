@@ -5,7 +5,7 @@ namespace MultiRepoMcp.GitHub;
 /// the GitHub App itself (used by installation discovery and the GitHub
 /// health check).
 /// </summary>
-public interface IGitHubAppJwtFactory
+internal interface IGitHubAppJwtFactory
 {
     ValueTask<string> CreateAsync(CancellationToken cancellationToken);
 }

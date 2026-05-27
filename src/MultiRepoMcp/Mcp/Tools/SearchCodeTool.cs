@@ -6,7 +6,7 @@ using Octokit;
 namespace MultiRepoMcp.Mcp.Tools;
 
 [McpServerToolType]
-public sealed class SearchCodeTool
+internal sealed class SearchCodeTool
 {
     public const int DefaultMaxResults = 30;
     public const int AbsoluteMaxResults = 100;

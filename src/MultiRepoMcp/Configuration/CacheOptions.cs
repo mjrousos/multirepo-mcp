@@ -1,6 +1,6 @@
 namespace MultiRepoMcp.Configuration;
 
-public sealed class CacheOptions
+internal sealed class CacheOptions
 {
     public const string SectionName = "Cache";
 

@@ -9,7 +9,7 @@ namespace MultiRepoMcp.Authentication;
 /// <c>X-Caller-Repository</c> header is present and (when an allowlist is
 /// configured) listed in <see cref="AuthenticationOptions.CallerRepositoryAllowlist"/>.
 /// </summary>
-public sealed class AllowlistedCallerRequirement : IAuthorizationRequirement
+internal sealed class AllowlistedCallerRequirement : IAuthorizationRequirement
 {
     public const string PolicyName = "RequireAllowlistedCaller";
     public const string HeaderName = "X-Caller-Repository";

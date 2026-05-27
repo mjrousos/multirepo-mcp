@@ -21,6 +21,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="MultiRepoMcp.UnitTests" />
     <InternalsVisibleTo Include="MultiRepoMcp.IntegrationTests" />
+    <!-- Castle DynamicProxy (used by Moq) needs this to mock internal interfaces. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
 </Project>

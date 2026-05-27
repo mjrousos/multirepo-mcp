@@ -72,5 +72,9 @@ app.Run();
 namespace MultiRepoMcp
 {
     /// <summary>Marker type used by <c>WebApplicationFactory&lt;Program&gt;</c> in tests.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Design",
+        "CA1515:Consider making public types internal",
+        Justification = "Must be public so the integration test project's public WebApplicationFactory<Program> subclass is accessible to xUnit (which discovers public test classes only).")]
     public partial class Program;
 }
