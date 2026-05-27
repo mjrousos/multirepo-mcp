@@ -1,0 +1,18 @@
+<Project>
+
+  <!-- Import the repo-root Directory.Build.props so we inherit ImplicitUsings,
+       nullable, AnalysisMode etc.; the local PropertyGroup below then layers
+       test-project-specific NoWarn additions on top. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props" />
+
+  <!--
+    Test projects use underscore-separated test names (XUnit convention) and
+    don't care about culture-sensitive Parse calls on hard-coded literal
+    strings. xUnit also requires public test classes, so CA1515 is suppressed
+    here (the production project keeps it enabled).
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1707;CA1305;CA1849;xUnit1031;CA2007;CA1812;CA1822;CA1859;CA1861;CA1056;CA1054;CA2000;CA1515</NoWarn>
+  </PropertyGroup>
+
+</Project>

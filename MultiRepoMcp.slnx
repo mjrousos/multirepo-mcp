@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MultiRepoMcp/MultiRepoMcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MultiRepoMcp.IntegrationTests/MultiRepoMcp.IntegrationTests.csproj" />
+    <Project Path="tests/MultiRepoMcp.UnitTests/MultiRepoMcp.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <!--
+      Suppressions, with rationale:
+        CA1014 - AssemblyVersionAttribute(CLSCompliant): not relevant for app code.
+        CA1848 - LoggerMessage source-generated delegates: skipped for v1; revisit if hot-path logs grow.
+        CA1873 - Avoid expensive log message arguments when logging disabled: noisy on property accesses; rely on LogLevel filter.
+        CA1508 - Avoid dead conditional code: false positives around double-checked locking under a SemaphoreSlim.
+    -->
+    <NoWarn>$(NoWarn);CA1014;CA1848;CA1873;CA1508</NoWarn>
+  </PropertyGroup>
+
+</Project>
