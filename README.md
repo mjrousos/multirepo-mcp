@@ -181,7 +181,7 @@ Search code inside a single target repository using GitHub's code-search REST AP
 | `owner` | string | yes | Repository owner. |
 | `repo` | string | yes | Repository name. |
 | `query` | string | yes | Free-text search expression. **May not** contain qualifier prefixes (`repo:`, `path:`, `language:`, …), boolean operators (`OR`, `NOT`), or leading-dash exclusions — the tool enforces single-repo scoping. Use double quotes for literal terms containing `:` or `-`. |
-| `max_results` | integer | no | Cap on returned results. Defaults to 30; absolute max 100. |
+| `maxResults` | integer | no | Cap on returned results. Defaults to 30; absolute max 100. |
 
 Returns `{ total_count, incomplete_results, returned_count, results: [{ path, name, sha, html_url, repo }], notes? }`.
 
