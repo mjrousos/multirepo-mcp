@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Configuration;
@@ -43,6 +44,10 @@ internal sealed class KeyVaultHealthCheck : IHealthCheck, IDisposable
         _logger = logger;
     }
 
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "Health checks must map *any* signing-pathway failure to an Unhealthy result rather than propagating; the timeout case is handled in a dedicated catch above this fallback.")]
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)

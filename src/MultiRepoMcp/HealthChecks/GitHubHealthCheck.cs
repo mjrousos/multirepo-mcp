@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -35,6 +36,10 @@ internal sealed class GitHubHealthCheck : IHealthCheck, IDisposable
         _logger = logger;
     }
 
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "Health checks must map *any* dependency failure to an Unhealthy result rather than propagating; specific cases (timeout, 401) are handled in dedicated catches above this fallback.")]
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)

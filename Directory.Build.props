@@ -14,8 +14,11 @@
         CA1848 - LoggerMessage source-generated delegates: skipped for v1; revisit if hot-path logs grow.
         CA1873 - Avoid expensive log message arguments when logging disabled: noisy on property accesses; rely on LogLevel filter.
         CA1508 - Avoid dead conditional code: false positives around double-checked locking under a SemaphoreSlim.
+        CA1515 - Types can be made internal: this is an application, not a published library, so most public types
+                 (MCP tool classes, options POCOs, DI interfaces, the Program partial for WebApplicationFactory) are
+                 reflected over or bound by the runtime/SDK and can't sensibly be made internal.
     -->
-    <NoWarn>$(NoWarn);CA1014;CA1848;CA1873;CA1508</NoWarn>
+    <NoWarn>$(NoWarn);CA1014;CA1848;CA1873;CA1508;CA1515</NoWarn>
   </PropertyGroup>
 
 </Project>
