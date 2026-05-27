@@ -1,6 +1,3 @@
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Authentication;
 using MultiRepoMcp.Configuration;

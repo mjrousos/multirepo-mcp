@@ -1,7 +1,6 @@
 using Azure.Core;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys.Cryptography;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Configuration;
 

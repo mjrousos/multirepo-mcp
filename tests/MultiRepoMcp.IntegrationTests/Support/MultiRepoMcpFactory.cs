@@ -1,11 +1,8 @@
-using System.Net;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using MultiRepoMcp;
 using WireMock.Server;
 
 namespace MultiRepoMcp.IntegrationTests.Support;

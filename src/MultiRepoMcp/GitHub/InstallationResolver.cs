@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Configuration;
 using MultiRepoMcp.GitHub.Exceptions;

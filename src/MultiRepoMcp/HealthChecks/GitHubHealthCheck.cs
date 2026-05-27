@@ -1,6 +1,5 @@
 using System.Net;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiRepoMcp.Configuration;
 using MultiRepoMcp.GitHub;

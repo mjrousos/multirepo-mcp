@@ -4,7 +4,6 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
-using Moq;
 using MultiRepoMcp.Configuration;
 using MultiRepoMcp.GitHub;
 

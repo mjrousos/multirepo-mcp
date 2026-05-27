@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using MultiRepoMcp.GitHub.Exceptions;
 using Octokit;

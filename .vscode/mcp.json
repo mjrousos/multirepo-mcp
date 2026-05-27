@@ -1,0 +1,9 @@
+{
+  "$schema": "https://aka.ms/vscode-mcp-schema",
+  "servers": {
+    "microsoft-docs": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    }
+  }
+}
