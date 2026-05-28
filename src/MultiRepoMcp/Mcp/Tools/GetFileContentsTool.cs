@@ -28,13 +28,14 @@ internal sealed class GetFileContentsTool
 
     [McpServerTool(Name = "get_file_contents")]
     [Description(
-        "Read the contents of a single file from a GitHub repository. " +
-        "Returns the file content (text or base64-encoded for binary), size, and sha. " +
-        "Returns typed errors for directories, submodules, symlinks, and files larger than 1 MiB.")]
+        "Read the contents of a file or directory from a GitHub repository. " +
+        "For a file, returns the content (text or base64-encoded for binary), size, and sha. " +
+        "For a directory, returns a listing of its immediate child entries. " +
+        "Returns typed errors for submodules, symlinks, and files larger than 1 MiB.")]
     public async Task<object> GetFileContents(
         [Description("Repository owner (user or org).")] string owner,
         [Description("Repository name.")] string repo,
-        [Description("Path to the file from the repository root (e.g. 'src/Program.cs').")] string path,
+        [Description("Path to a file or directory from the repository root (e.g. 'src/Program.cs' or 'src').")] string path,
         [Description("Optional ref (branch, tag, or commit SHA). Defaults to the repository's default branch.")] string? @ref = null,
         CancellationToken cancellationToken = default)
     {
@@ -78,23 +79,16 @@ internal sealed class GetFileContentsTool
                 || !string.Equals(entryPath, requestedPath, StringComparison.Ordinal);
             if (isDirectoryListing)
             {
-                return new
-                {
-                    error = "PathIsDirectory",
-                    message = "Path resolves to a directory; directory listing is not supported in this version.",
-                    path,
-                };
+                return BuildDirectoryListing(path, contents);
             }
 
             switch (entry.Type.Value)
             {
                 case ContentType.Dir:
-                    return new
-                    {
-                        error = "PathIsDirectory",
-                        message = "Path resolves to a directory; directory listing is not supported in this version.",
-                        path,
-                    };
+                    // Defensive: an entry whose own Path matches the request but
+                    // is typed as a directory (e.g. an empty directory) is still
+                    // returned as a — possibly empty — listing.
+                    return BuildDirectoryListing(path, contents);
 
                 case ContentType.Submodule:
                     return new
@@ -148,6 +142,38 @@ internal sealed class GetFileContentsTool
             return McpToolErrorMapper.BuildToolError(ex);
         }
     }
+
+    private static object BuildDirectoryListing(string path, IReadOnlyList<RepositoryContent> contents)
+    {
+        var entries = contents
+            .Select(c => new
+            {
+                name = c.Name,
+                path = c.Path,
+                type = MapContentType(c.Type.Value),
+                size = c.Size,
+                sha = c.Sha,
+                html_url = c.HtmlUrl,
+            })
+            .OrderBy(e => e.type, StringComparer.Ordinal)
+            .ThenBy(e => e.name, StringComparer.Ordinal)
+            .ToArray();
+
+        return new
+        {
+            path,
+            type = "dir",
+            entries,
+        };
+    }
+
+    private static string MapContentType(ContentType type) => type switch
+    {
+        ContentType.Dir => "dir",
+        ContentType.Submodule => "submodule",
+        ContentType.Symlink => "symlink",
+        _ => "file",
+    };
 
     private static (string Content, bool IsBinary) TryDecode(RepositoryContent entry)
     {

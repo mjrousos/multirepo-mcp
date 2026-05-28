@@ -36,14 +36,14 @@ public class McpToolsEndToEndTests
     }
 
     [Fact]
-    public async Task get_file_contents_returns_PathIsDirectory_for_single_child_directory()
+    public async Task get_file_contents_returns_directory_listing_for_single_child_directory()
     {
         // Regression test: GitHub returns a JSON array listing for ANY
         // directory — including one that contains exactly one child. A
         // naive "contents.Count > 1" check would mis-classify this as the
         // file itself and return the child's content as if the directory
         // path had been a file. The fix compares the returned entry's Path
-        // against the requested path.
+        // against the requested path and emits a directory listing.
         using var factory = new MultiRepoMcpFactory();
         factory.WireMock.StubInstallationDiscovery("octo", "hello", installationId: 99);
         factory.WireMock.StubTokenMint(
@@ -56,8 +56,30 @@ public class McpToolsEndToEndTests
         var resp = await PostMcpAsync(client, BuildCall("octo", "hello", "lonely-dir"));
         var body = await ReadMcpBodyAsync(resp);
 
-        body.Should().Contain("PathIsDirectory",
-            "a single-entry directory listing must still be reported as a directory, not as the child file");
+        body.Should().NotContain("PathIsDirectory",
+            "directory listing is now supported and must not be reported as an error");
+        body.Should().Contain("lonely-dir/only-child.txt",
+            "a single-entry directory listing must still enumerate its child");
+    }
+
+    [Fact]
+    public async Task get_file_contents_returns_directory_listing_for_multi_child_directory()
+    {
+        using var factory = new MultiRepoMcpFactory();
+        factory.WireMock.StubInstallationDiscovery("octo", "hello", installationId: 99);
+        factory.WireMock.StubTokenMint(
+            installationId: 99,
+            token: "ghs_test-token",
+            expiresAt: DateTimeOffset.UtcNow.AddMinutes(60));
+        factory.WireMock.StubDirectoryListing("octo", "hello", "src", "a.cs", "b.cs");
+
+        using var client = factory.CreateAuthenticatedClient();
+        var resp = await PostMcpAsync(client, BuildCall("octo", "hello", "src"));
+        var body = await ReadMcpBodyAsync(resp);
+
+        body.Should().Contain("src/a.cs");
+        body.Should().Contain("src/b.cs");
+        body.Should().NotContain("PathIsDirectory");
     }
 
     [Fact]
