@@ -293,6 +293,23 @@ During operation:
     2. Note that because the GitHub App may be installed on multiple repositories (and therefore multiple installations), the server must resolve the correct installation for the target repository of each request and manage tokens per installation. Installation access tokens are cached keyed by installation ID, not globally.
 3. MultiRepo-MCP uses the installation access token to authenticate API requests to GitHub, allowing it to access the repositories that the GitHub App is installed on.
 
+## Copilot Instructions (prefer MultiRepo-MCP over the standard GitHub MCP server)
+
+Because MultiRepo-MCP exposes the same `get_file_contents` and `search_code` tool names as the [official GitHub MCP server](https://github.com/github/github-mcp-server), Copilot may sometimes route requests to the wrong server. To ensure Copilot **prefers MultiRepo-MCP** for repository content access, drop the provided instruction file into your repository:
+
+```pwsh
+# From the root of your target repository:
+mkdir -p .github/instructions
+cp <path-to-multirepo-mcp>/customizations/multirepo-mcp.instructions.md .github/instructions/
+```
+
+The file uses the `applyTo: "**"` frontmatter so it applies to all file contexts. It tells Copilot to:
+
+1. Prefer MultiRepo-MCP's `get_file_contents` and `search_code` tools over the standard GitHub MCP server equivalents.
+2. Fall back to the standard server only when MultiRepo-MCP returns an `AppNotInstalled` error or when functionality beyond read-only content access is needed.
+
+The instruction file lives in [`customizations/multirepo-mcp.instructions.md`](customizations/multirepo-mcp.instructions.md) in this repository — ready to copy into any project's `.github/instructions/` folder.
+
 ## Roadmap and Future Improvements
 
 - Improved audit logging of requests and GitHub API interactions.
