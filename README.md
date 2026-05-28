@@ -124,6 +124,45 @@ The container expects to run behind a **TLS-terminating reverse proxy** (Azure C
 
 The server exposes a [streamable-HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) MCP endpoint at `POST /mcp`.
 
+### Registering the server in your MCP client
+
+When adding this server to your MCP client configuration, use **`github-multirepo-mcp`** as the server name. This is the canonical name referenced by the [Copilot instructions file](#copilot-instructions-prefer-multirepo-mcp-over-the-standard-github-mcp-server) and ensures Copilot correctly disambiguates this server from the standard GitHub MCP server.
+
+Example `.mcp.json` (Copilot CLI / Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "github-multirepo-mcp": {
+      "type": "http",
+      "url": "https://your-host/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-bearer-token>"
+      }
+    }
+  }
+}
+```
+
+Example `.vscode/mcp.json` (VS Code Copilot Chat):
+
+```json
+{
+  "$schema": "https://aka.ms/vscode-mcp-schema",
+  "servers": {
+    "github-multirepo-mcp": {
+      "type": "http",
+      "url": "https://your-host/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-bearer-token>"
+      }
+    }
+  }
+}
+```
+
+### Required headers
+
 The transport-level headers required by the streamable-HTTP spec — `Content-Type: application/json` and `Accept: application/json, text/event-stream` — are sent automatically by every conforming MCP client (the official TypeScript, Python, and C# SDKs all do this in their HTTP transport). You should **not** need to configure these yourself.
 
 The headers you do need to configure on the MCP client are:
@@ -305,8 +344,10 @@ cp <path-to-multirepo-mcp>/customizations/multirepo-mcp.instructions.md .github/
 
 The file uses the `applyTo: "**"` frontmatter so it applies to all file contexts. It tells Copilot to:
 
-1. Prefer MultiRepo-MCP's `get_file_contents` and `search_code` tools over the standard GitHub MCP server equivalents.
+1. Prefer the tools from the server named **`github-multirepo-mcp`** for `get_file_contents` and `search_code` over the standard GitHub MCP server equivalents.
 2. Fall back to the standard server only when MultiRepo-MCP returns an `AppNotInstalled` error or when functionality beyond read-only content access is needed.
+
+> **Important:** When registering this MCP server in your client configuration, use `github-multirepo-mcp` as the server name (see [Registering the server in your MCP client](#registering-the-server-in-your-mcp-client)). The instructions file references this exact name for tool disambiguation.
 
 The instruction file lives in [`customizations/multirepo-mcp.instructions.md`](customizations/multirepo-mcp.instructions.md) in this repository — ready to copy into any project's `.github/instructions/` folder.
 
