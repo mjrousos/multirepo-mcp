@@ -66,12 +66,21 @@ internal sealed class GetFileContentsTool
                 throw new NotFoundException("File not found.", System.Net.HttpStatusCode.NotFound);
             }
 
-            // Directory detection: Octokit returns a List for both file lookups
-            // and directory listings. For a file/symlink/submodule, the single
-            // entry's Path equals the requested path. For a directory, each
-            // entry's Path is a child under the requested prefix — including
-            // the corner case where the directory has exactly one child, which
-            // count-based detection would mis-classify as a file.
+            // Octokit's GetAllContents normalizes the overloaded GitHub
+            // Contents API into a single IReadOnlyList<RepositoryContent>, but
+            // its meaning depends on what `path` resolves to:
+            //   * File: GitHub returns a single JSON object, so the list has
+            //     exactly ONE entry whose Path equals the requested path. That
+            //     entry IS the file.
+            //   * Directory: GitHub returns a JSON array, so the list holds the
+            //     directory's immediate CHILDREN. Each child's Path is nested
+            //     under the requested path (e.g. requesting "src" yields
+            //     "src/a.cs", "src/b.cs").
+            // We therefore can't distinguish the two by count alone: a directory
+            // with exactly one child also yields a single-element list, but that
+            // element's Path is the child ("dir/only-child.txt"), not the
+            // requested directory ("dir"). Comparing the first entry's Path to
+            // the requested path disambiguates the single-child corner case.
             var entry = contents[0];
             var entryPath = entry.Path?.TrimStart('/') ?? string.Empty;
             var requestedPath = path.TrimStart('/');
