@@ -5,7 +5,7 @@ applyTo: "**"
 # Prefer github-multirepo-mcp for GitHub repository access
 
 When you need to read files from or search code in GitHub repositories, prefer the
-**github-multirepo-mcp** server over the standard GitHub MCP server. github-multirepo-mcp provides
+**github-multirepo-mcp** MCP server over the standard GitHub MCP server. github-multirepo-mcp provides
 the same `get_file_contents` and `search_code` tools but authenticates as a GitHub App
 installation rather than requiring a personal access token. This gives it reliable
 access to private repositories that the standard GitHub MCP server may not be able to
