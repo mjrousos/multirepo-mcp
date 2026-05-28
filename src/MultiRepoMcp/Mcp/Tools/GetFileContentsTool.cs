@@ -28,13 +28,14 @@ internal sealed class GetFileContentsTool
 
     [McpServerTool(Name = "get_file_contents")]
     [Description(
-        "Read the contents of a single file from a GitHub repository. " +
-        "Returns the file content (text or base64-encoded for binary), size, and sha. " +
-        "Returns typed errors for directories, submodules, symlinks, and files larger than 1 MiB.")]
+        "Read the contents of a file or directory from a GitHub repository. " +
+        "For a file, returns the content (text or base64-encoded for binary), size, and sha. " +
+        "For a directory, returns a listing of its immediate child entries. " +
+        "Returns typed errors for submodules, symlinks, and files larger than 1 MiB.")]
     public async Task<object> GetFileContents(
         [Description("Repository owner (user or org).")] string owner,
         [Description("Repository name.")] string repo,
-        [Description("Path to the file from the repository root (e.g. 'src/Program.cs').")] string path,
+        [Description("Path to a file or directory from the repository root (e.g. 'src/Program.cs' or 'src').")] string path,
         [Description("Optional ref (branch, tag, or commit SHA). Defaults to the repository's default branch.")] string? @ref = null,
         CancellationToken cancellationToken = default)
     {
@@ -65,12 +66,21 @@ internal sealed class GetFileContentsTool
                 throw new NotFoundException("File not found.", System.Net.HttpStatusCode.NotFound);
             }
 
-            // Directory detection: Octokit returns a List for both file lookups
-            // and directory listings. For a file/symlink/submodule, the single
-            // entry's Path equals the requested path. For a directory, each
-            // entry's Path is a child under the requested prefix — including
-            // the corner case where the directory has exactly one child, which
-            // count-based detection would mis-classify as a file.
+            // Octokit's GetAllContents normalizes the overloaded GitHub
+            // Contents API into a single IReadOnlyList<RepositoryContent>, but
+            // its meaning depends on what `path` resolves to:
+            //   * File: GitHub returns a single JSON object, so the list has
+            //     exactly ONE entry whose Path equals the requested path. That
+            //     entry IS the file.
+            //   * Directory: GitHub returns a JSON array, so the list holds the
+            //     directory's immediate CHILDREN. Each child's Path is nested
+            //     under the requested path (e.g. requesting "src" yields
+            //     "src/a.cs", "src/b.cs").
+            // We therefore can't distinguish the two by count alone: a directory
+            // with exactly one child also yields a single-element list, but that
+            // element's Path is the child ("dir/only-child.txt"), not the
+            // requested directory ("dir"). Comparing the first entry's Path to
+            // the requested path disambiguates the single-child corner case.
             var entry = contents[0];
             var entryPath = entry.Path?.TrimStart('/') ?? string.Empty;
             var requestedPath = path.TrimStart('/');
@@ -78,23 +88,16 @@ internal sealed class GetFileContentsTool
                 || !string.Equals(entryPath, requestedPath, StringComparison.Ordinal);
             if (isDirectoryListing)
             {
-                return new
-                {
-                    error = "PathIsDirectory",
-                    message = "Path resolves to a directory; directory listing is not supported in this version.",
-                    path,
-                };
+                return BuildDirectoryListing(path, contents);
             }
 
             switch (entry.Type.Value)
             {
                 case ContentType.Dir:
-                    return new
-                    {
-                        error = "PathIsDirectory",
-                        message = "Path resolves to a directory; directory listing is not supported in this version.",
-                        path,
-                    };
+                    // Defensive: an entry whose own Path matches the request but
+                    // is typed as a directory (e.g. an empty directory) is still
+                    // returned as a — possibly empty — listing.
+                    return BuildDirectoryListing(path, contents);
 
                 case ContentType.Submodule:
                     return new
@@ -148,6 +151,38 @@ internal sealed class GetFileContentsTool
             return McpToolErrorMapper.BuildToolError(ex);
         }
     }
+
+    private static object BuildDirectoryListing(string path, IReadOnlyList<RepositoryContent> contents)
+    {
+        var entries = contents
+            .Select(c => new
+            {
+                name = c.Name,
+                path = c.Path,
+                type = MapContentType(c.Type.Value),
+                size = c.Size,
+                sha = c.Sha,
+                html_url = c.HtmlUrl,
+            })
+            .OrderBy(e => e.type, StringComparer.Ordinal)
+            .ThenBy(e => e.name, StringComparer.Ordinal)
+            .ToArray();
+
+        return new
+        {
+            path,
+            type = "dir",
+            entries,
+        };
+    }
+
+    private static string MapContentType(ContentType type) => type switch
+    {
+        ContentType.Dir => "dir",
+        ContentType.Submodule => "submodule",
+        ContentType.Symlink => "symlink",
+        _ => "file",
+    };
 
     private static (string Content, bool IsBinary) TryDecode(RepositoryContent entry)
     {
