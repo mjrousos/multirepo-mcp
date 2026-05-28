@@ -28,6 +28,8 @@ internal sealed class SearchCodeTool
     [McpServerTool(Name = "search_code")]
     [Description(
         "Search code within a single GitHub repository using GitHub's code-search REST API. " +
+        "Multiple terms are implicitly AND-joined (all terms must appear in the same file). " +
+        "Use \"quoted phrases\" for exact multi-word matches. " +
         "Limitations: only files on the repository's DEFAULT BRANCH are searched, files larger " +
         "than ~384 KB are not indexed, and the repository must be indexed by GitHub's code-search " +
         "(generally automatic for org-owned repos; personal repos may need opt-in). " +
@@ -36,7 +38,7 @@ internal sealed class SearchCodeTool
     public async Task<object> SearchCode(
         [Description("Repository owner (user or org).")] string owner,
         [Description("Repository name.")] string repo,
-        [Description("Free-text search expression (no qualifiers; use double quotes for literals containing ':' or '-').")] string query,
+        [Description("Free-text search expression. Multiple terms are implicitly AND-joined; use double quotes for exact phrases or literals containing ':' or '-'. No qualifiers, OR/NOT, or leading-dash exclusions.")] string query,
         [Description("Maximum number of results to return. Defaults to 30; capped at 100.")] int? maxResults = null,
         CancellationToken cancellationToken = default)
     {
