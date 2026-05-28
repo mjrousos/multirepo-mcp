@@ -99,3 +99,13 @@ Two workspace-level config files register the **Microsoft Learn Docs** MCP serve
 - `.vscode/mcp.json` — picked up by **VS Code Copilot Chat** when the workspace is opened.
 
 Use this MCP to look up authoritative documentation for any Microsoft-stack API touched by this repo — `Azure.Identity`, `Azure.Security.KeyVault.Keys`, `Microsoft.Extensions.Caching.Memory`, ASP.NET Core auth/authorization/health-checks, `TimeProvider`, and similar — instead of relying on training-data recall. Prefer it over a web search when the question is about a specific API surface, behavior, or version compatibility.
+
+## Behavioral reference: GitHub MCP Server
+
+This server's tool surface intentionally mirrors the behavior of the official [GitHub MCP Server](https://github.com/github/github-mcp-server). When adding or changing tool behavior — especially `search_code` query semantics — match that server's conventions:
+
+- **Implicit AND** between space-separated terms (all terms must appear in the same file).
+- **Quoted phrases** (`"exact match"`) for exact multi-word sequences.
+- Qualifier injection (`repo:owner/name`) is done server-side; callers supply only free-text terms.
+
+When in doubt about expected behavior for a tool, consult the GitHub MCP Server's documentation as the canonical reference.
