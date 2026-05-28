@@ -80,7 +80,8 @@ internal sealed class SearchCodeTool
                 returned_count = hits.Length,
                 results = hits,
                 notes = result.TotalCount == 0
-                    ? "No matches. If the repository is not indexed by GitHub code-search, results will always be empty."
+                    ? "No matches. If the repository is not indexed by GitHub code-search, results will always be empty. " +
+                      "As a fallback when you know the file path, use the get_file_contents tool to fetch (or list a directory and then fetch) the file directly."
                     : null,
             };
         }
